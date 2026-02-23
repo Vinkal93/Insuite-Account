@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InSuite Accounts | Professional Accounting</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+
+    <!-- Material Symbols -->
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <div id="app">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="logo">
+                    <span class="material-symbols-rounded">account_balance_wallet</span>
+                </div>
+                <div class="brand-text">
+                    <h1>InSuite</h1>
+                    <span>Accounts</span>
+                </div>
+            </div>
+
+            <nav class="nav-menu">
+                <a href="#dashboard" class="nav-item active" data-view="dashboard">
+                    <span class="material-symbols-rounded">dashboard</span>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#ledger" class="nav-item" data-view="ledger">
+                    <span class="material-symbols-rounded">menu_book</span>
+                    <span>Ledger</span>
+                </a>
+                <a href="#invoices" class="nav-item" data-view="invoices">
+                    <span class="material-symbols-rounded">receipt_long</span>
+                    <span>Invoices</span>
+                </a>
+                <a href="#reports" class="nav-item" data-view="reports">
+                    <span class="material-symbols-rounded">bar_chart</span>
+                    <span>Reports</span>
+                </a>
+                <a href="#gst" class="nav-item" data-view="gst">
+                    <span class="material-symbols-rounded">percent</span>
+                    <span>GST Filing</span>
+                </a>
+                <a href="#customers" class="nav-item" data-view="customers">
+                    <span class="material-symbols-rounded">group</span>
+                    <span>Customers</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <a href="#settings" class="nav-item" data-view="settings">
+                    <span class="material-symbols-rounded">settings</span>
+                    <span>Settings</span>
+                </a>
+                <div class="user-profile">
+                    <div class="avatar">VP</div>
+                    <div class="user-info">
+                        <span class="name">Vinka Profile</span>
+                        <span class="role">Admin</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="top-header">
+                <div class="header-title">
+                    <h2 id="page-title">Dashboard</h2>
+                    <span id="current-date">October 24, 2026</span>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-icon">
+                        <span class="material-symbols-rounded">search</span>
+                    </button>
+                    <button class="btn btn-icon notification-badge">
+                        <span class="material-symbols-rounded">notifications</span>
+                    </button>
+                    <button class="btn btn-primary" id="quick-action-btn">
+                        <span class="material-symbols-rounded">add</span>
+                        <span>New Transaction</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Views -->
+            <div id="views-container">
+
+                <!-- Dashboard View -->
+                <div id="view-dashboard" class="view active">
+                    <div class="stats-grid">
+                        <div class="stat-card income">
+                            <div class="icon-box">
+                                <span class="material-symbols-rounded">trending_up</span>
+                            </div>
+                            <div class="stat-info">
+                                <span class="label">Total Income</span>
+                                <h3 class="value">₹1,25,000</h3>
+                                <span class="trend positive">+12.5% vs last month</span>
+                            </div>
+                        </div>
+                        <div class="stat-card expense">
+                            <div class="icon-box">
+                                <span class="material-symbols-rounded">trending_down</span>
+                            </div>
+                            <div class="stat-info">
+                                <span class="label">Total Expenses</span>
+                                <h3 class="value">₹45,000</h3>
+                                <span class="trend negative">+5.2% vs last month</span>
+                            </div>
+                        </div>
+                        <div class="stat-card profit">
+                            <div class="icon-box">
+                                <span class="material-symbols-rounded">account_balance</span>
+                            </div>
+                            <div class="stat-info">
+                                <span class="label">Net Profit</span>
+                                <h3 class="value">₹80,000</h3>
+                                <span class="trend positive">+18.2% healthy</span>
+                            </div>
+                        </div>
+                        <div class="stat-card receivable">
+                            <div class="icon-box">
+                                <span class="material-symbols-rounded">pending_actions</span>
+                            </div>
+                            <div class="stat-info">
+                                <span class="label">Receivables</span>
+                                <h3 class="value">₹12,450</h3>
+                                <span class="trend neutral">3 invoices overdue</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-grid">
+                        <div class="card chart-card">
+                            <div class="card-header">
+                                <h3>Cash Flow</h3>
+                                <select class="select-sm">
+                                    <option>This Year</option>
+                                    <option>Last 6 Months</option>
+                                </select>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="cashFlowChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="card transactions-card">
+                            <div class="card-header">
+                                <h3>Recent Transactions</h3>
+                                <button class="btn btn-text">View All</button>
+                            </div>
+                            <div class="transactions-list">
+                                <!-- Populated by JS -->
+                                <div class="transaction-item">
+                                    <div class="trans-icon income">
+                                        <span class="material-symbols-rounded">arrow_downward</span>
+                                    </div>
+                                    <div class="trans-details">
+                                        <span class="trans-title">Web Design Project</span>
+                                        <span class="trans-date">Today, 10:42 AM</span>
+                                    </div>
+                                    <span class="trans-amount income">+₹25,000</span>
+                                </div>
+                                <div class="transaction-item">
+                                    <div class="trans-icon expense">
+                                        <span class="material-symbols-rounded">arrow_upward</span>
+                                    </div>
+                                    <div class="trans-details">
+                                        <span class="trans-title">Office Rent</span>
+                                        <span class="trans-date">Yesterday, 09:15 AM</span>
+                                    </div>
+                                    <span class="trans-amount expense">-₹15,000</span>
+                                </div>
+                                <div class="transaction-item">
+                                    <div class="trans-icon expense">
+                                        <span class="material-symbols-rounded">arrow_upward</span>
+                                    </div>
+                                    <div class="trans-details">
+                                        <span class="trans-title">Software License</span>
+                                        <span class="trans-date">Oct 22, 2026</span>
+                                    </div>
+                                    <span class="trans-amount expense">-₹2,500</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ledger View -->
+                <div id="view-ledger" class="view">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>General Ledger</h3>
+                            <div class="actions">
+                                <button class="btn btn-outline" id="filter-ledger">
+                                    <span class="material-symbols-rounded">filter_list</span>
+                                    Filter
+                                </button>
+                                <button class="btn btn-primary" id="add-transaction">
+                                    <span class="material-symbols-rounded">add</span>
+                                    Add Entry
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Description</th>
+                                        <th>Account</th>
+                                        <th class="text-right">Debit</th>
+                                        <th class="text-right">Credit</th>
+                                        <th class="text-right">Balance</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ledger-entries">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Invoices View -->
+                <div id="view-invoices" class="view">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Invoices</h3>
+                            <button class="btn btn-primary" id="create-invoice">
+                                <span class="material-symbols-rounded">add</span>
+                                Create Invoice
+                            </button>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Invoice #</th>
+                                        <th>Customer</th>
+                                        <th>Date</th>
+                                        <th>Status</th>
+                                        <th class="text-right">Amount</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="invoice-list">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reports View -->
+                <div id="view-reports" class="view">
+                    <div class="report-grid">
+                        <div class="card report-card" onclick="app.generateReport('pl')">
+                            <span class="material-symbols-rounded icon">analytics</span>
+                            <h3>Profit & Loss</h3>
+                            <p>Income, expenses, and net profit over a period.</p>
+                        </div>
+                        <div class="card report-card" onclick="app.generateReport('bs')">
+                            <span class="material-symbols-rounded icon">account_balance</span>
+                            <h3>Balance Sheet</h3>
+                            <p>Assets, liabilities, and equity snapshot.</p>
+                        </div>
+                        <div class="card report-card" onclick="app.generateReport('cf')">
+                            <span class="material-symbols-rounded icon">payments</span>
+                            <h3>Cash Flow</h3>
+                            <p>Inflows and outflows of cash.</p>
+                        </div>
+                        <div class="card report-card" onclick="app.generateReport('tb')">
+                            <span class="material-symbols-rounded icon">balance</span>
+                            <h3>Trial Balance</h3>
+                            <p>List of all account balances.</p>
+                        </div>
+                    </div>
+                    <!-- Report Display Area -->
+                    <div id="report-output" class="card hidden margin-top">
+                        <!-- Dynamic Report Content -->
+                    </div>
+                </div>
+
+                <!-- Other views (GST, Settings) will be populated similarly -->
+                <!-- GST View -->
+                <div id="view-gst" class="view">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>GST Filing Dashboard</h3>
+                            <button class="btn btn-primary">File GSTR-1</button>
+                        </div>
+                        <div class="dashboard-grid">
+                            <div class="stat-card">
+                                <div class="stat-info">
+                                    <span class="label">Tax Liability (Output GST)</span>
+                                    <h3 class="value" id="gst-output">₹0</h3>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-info">
+                                    <span class="label">Input Tax Credit</span>
+                                    <h3 class="value" id="gst-input">₹0</h3>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-info">
+                                    <span class="label">Net Payable</span>
+                                    <h3 class="value" id="gst-payable">₹0</h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Customers View -->
+                <div id="view-customers" class="view">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Customers</h3>
+                            <button class="btn btn-primary">Add Customer</button>
+                        </div>
+                        <div class="text-center p-4">
+                            <p class="text-secondary">Customer management module loading...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings View -->
+                <div id="view-settings" class="view">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Settings</h3>
+                            <button class="btn btn-primary">Save Changes</button>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group margin-top">
+                                <label>Company Name</label>
+                                <input type="text" value="My Business" class="form-control"
+                                    style="width:100%;padding:8px;margin-top:4px;">
+                            </div>
+                            <div class="form-group margin-top">
+                                <label>GST Number</label>
+                                <input type="text" placeholder="22AAAAA0000A1Z5" class="form-control"
+                                    style="width:100%;padding:8px;margin-top:4px;">
+                            </div>
+                            <div class="margin-top">
+                                <button class="btn btn-outline text-danger"
+                                    onclick="localStorage.clear();location.reload()">Reset All Data</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal-container"></div>
+
+    <!-- Application Logic -->
+    <script type="module" src="js/app.js"></script>
+</body>
+
+</html>
