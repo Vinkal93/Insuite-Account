@@ -253,16 +253,79 @@ InSuite Accounts/
 
 ---
 
-## 👨‍💻 Developer
+## 👨‍💻 About the Developer
 
-<table>
-  <tr>
-    <td align="center">
-      <b>Vinkal Patel</b><br/>
-      <a href="https://github.com/Vinkal93">@Vinkal93</a>
-    </td>
-  </tr>
-</table>
+<h3 align="center">Vinkal Prajapati</h3>
+
+<p align="center">
+  <i>Developer · Educator · AI Researcher · Entrepreneur</i>
+</p>
+
+> *"Technology is not just about coding; it's about connecting people, solving problems, and shaping the world for better."*
+> — **Vinkal Prajapati**
+
+### 🧩 Who is Vinkal Prajapati?
+
+| Attribute | Details |
+|-----------|---------|
+| **Full Name** | Vinkal Prajapati |
+| **Profession** | Developer, Educator, AI Researcher |
+| **Primary Skills** | Web Development, React.js, TypeScript, Tally Prime, AI Integration |
+| **Known For** | Building smart tools & learning ecosystems |
+| **Major Projects** | InSuite Accounts, Vinkal041 Chatbot, VinCom UI Library, Typing Tutor Platform |
+| **Mission** | To simplify learning and development using AI-driven technologies |
+
+### 💻 Developer Journey
+
+Vinkal began his tech journey by exploring HTML, CSS, and JavaScript, later mastering frameworks like **React.js**, **TypeScript**, and **Next.js**. His passion for UI/UX perfection led him to build advanced, professional-grade applications that compete with modern standards.
+
+From developing AI tools, custom web browsers, and React-based applications, to guiding students in **Tally Prime** and **CCC exams**, Vinkal stands out as a true multi-dimensional innovator.
+
+### 🧰 Core Expertise
+
+| Area | Skills / Tools |
+|------|---------------|
+| **Frontend** | HTML5, CSS3, JavaScript, React.js, TypeScript, Next.js |
+| **Backend** | Node.js, Express.js, Firebase |
+| **App Dev** | Android SDK, Gradle, Kotlin Basics, Capacitor |
+| **Design & UX** | Figma, Tailwind CSS, Material UI, Material Design 3 |
+| **AI Integration** | Chatbot Development, Automation Tools |
+| **Education** | Tally Prime, Typing Tutor, CCC Exam Preparation |
+
+### 🚀 Notable Projects
+
+| Project | Description |
+|---------|-------------|
+| 🧾 **InSuite Accounts** | Professional accounting software — Tally alternative with GST, 18 reports, multi-format export |
+| 💬 **Vinkal041 Chatbot** | Custom AI chatbot for intelligent conversation & teaching |
+| 🧠 **VinCom UI Library** | 200+ reusable React components with live previews & NPM integration |
+| 🧮 **Tally Prime Guide** | Structured learning series (V1–V10) with real-world accounting cases |
+| ⌨️ **Typing Tutor** | Gamified typing platform with daily lessons & speed tracking |
+
+### 🧑‍🏫 Educator & Mentor
+
+Vinkal also runs a **Computer Institute**, helping students master:
+- ✅ Tally Prime (all versions)
+- ✅ CCC Exam Preparation (Bilingual Notes & PDFs)
+- ✅ Typing Skill Development
+- ✅ Python & Web Development Fundamentals
+
+### 🌍 Connect with Vinkal
+
+<p align="center">
+  <a href="https://github.com/Vinkal93"><img src="https://img.shields.io/badge/GitHub-Vinkal93-181717?style=for-the-badge&logo=github" alt="GitHub"/></a>
+  <a href="https://github.com/vinkal041"><img src="https://img.shields.io/badge/GitHub-vinkal041-181717?style=for-the-badge&logo=github" alt="GitHub Alt"/></a>
+  <a href="https://linkedin.com/in/vinkal041"><img src="https://img.shields.io/badge/LinkedIn-vinkal041-0A66C2?style=for-the-badge&logo=linkedin" alt="LinkedIn"/></a>
+  <a href="https://hashnode.com/@vinkal041"><img src="https://img.shields.io/badge/Hashnode-vinkal041-2962FF?style=for-the-badge&logo=hashnode" alt="Hashnode"/></a>
+  <a href="https://vinkal041.blogspot.com"><img src="https://img.shields.io/badge/Blog-vinkal041-FF5722?style=for-the-badge&logo=blogger" alt="Blog"/></a>
+</p>
+
+### 💡 Vision & Goals
+
+- 🎯 Build a complete **AI-driven learning ecosystem**
+- 🎯 Create a verified **student hiring platform**
+- 🎯 Launch **smart educational bots**
+- 🎯 Promote **digital literacy** and self-learning culture in India
 
 ---
 
