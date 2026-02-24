@@ -1,488 +1,539 @@
-import { useState, useEffect } from 'react';
-import db from '../db/database';
-import type { Company } from '../types';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import db, { createCompany, deleteCompany } from '../db/database';
+import type { Company, FinancialYear } from '../types';
+import { useCompany } from '../context/CompanyContext';
+import { useConfirm } from '../components/ConfirmModal';
+import { useToast } from '../components/Toast';
+import { encryptData, decryptData, downloadFile, readFileAsArrayBuffer } from '../utils/backup';
 
-type SetupStep = 'basic' | 'address' | 'tax' | 'bank' | 'branding';
-
-const steps: { key: SetupStep; label: string; icon: string }[] = [
-    { key: 'basic', label: 'Basic Info', icon: '📋' },
-    { key: 'address', label: 'Address', icon: '📍' },
-    { key: 'tax', label: 'Tax Details', icon: '🧾' },
-    { key: 'bank', label: 'Bank Details', icon: '🏦' },
-    { key: 'branding', label: 'Branding', icon: '🎨' },
-];
-
-const indianStates = [
+const INDIAN_STATES = [
     'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
     'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
     'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram',
     'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu',
     'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
-    'Delhi', 'Jammu and Kashmir', 'Ladakh'
+    'Delhi', 'Jammu and Kashmir', 'Ladakh',
 ];
 
+const EMPTY_FORM = {
+    name: '', address: '', city: '', state: '', pincode: '', country: 'India',
+    phone: '', email: '', website: '', gstin: '', pan: '', logo: '',
+    baseCurrency: 'INR', currencySymbol: '₹',
+    booksBeginningDate: new Date().toISOString().split('T')[0],
+};
+
+type ModalView = 'none' | 'welcome' | 'create' | 'import';
+
 export default function CompanySetup() {
-    const [currentStep, setCurrentStep] = useState<SetupStep>('basic');
-    const [loading, setLoading] = useState(true);
+    const { companies, activeCompany, setActiveCompany, refreshCompanies } = useCompany();
+    const confirm = useConfirm();
+    const { showToast } = useToast();
+    const [modalView, setModalView] = useState<ModalView>('none');
+    const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+    const [formData, setFormData] = useState({ ...EMPTY_FORM });
     const [saving, setSaving] = useState(false);
-    const [formData, setFormData] = useState<Partial<Company>>({
-        name: '',
-        gstin: '',
-        pan: '',
-        address: '',
-        city: '',
-        state: '',
-        pincode: '',
-        phone: '',
-        email: '',
-        bankName: '',
-        bankAccount: '',
-        bankIfsc: '',
-        financialYearStart: '04',
-        logo: '',
-    });
+    const [financialYears, setFinancialYears] = useState<FinancialYear[]>([]);
+    const [exporting, setExporting] = useState<number | null>(null);
+    const [dragOver, setDragOver] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const importFileRef = useRef<HTMLInputElement>(null);
+
+    // Show welcome when no companies
+    useEffect(() => {
+        if (companies.length === 0 && modalView === 'none') {
+            setModalView('welcome');
+        }
+    }, [companies, modalView]);
 
     useEffect(() => {
-        loadCompany();
-    }, []);
-
-    const loadCompany = async () => {
-        const company = await db.company.toCollection().first();
-        if (company) {
-            setFormData(company);
+        if (activeCompany?.id) {
+            db.financialYears.where({ companyId: activeCompany.id }).toArray().then(setFinancialYears);
         }
-        setLoading(false);
+    }, [activeCompany]);
+
+    const openCreate = () => {
+        setFormData({ ...EMPTY_FORM });
+        setEditingCompany(null);
+        setModalView('create');
     };
 
-    const updateField = (field: keyof Company, value: string) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
+    const openEdit = (c: Company) => {
+        setFormData({
+            name: c.name, address: c.address, city: c.city, state: c.state,
+            pincode: c.pincode, country: c.country, phone: c.phone || '',
+            email: c.email || '', website: c.website || '', gstin: c.gstin || '',
+            pan: c.pan || '', logo: c.logo || '', baseCurrency: c.baseCurrency,
+            currencySymbol: c.currencySymbol, booksBeginningDate: c.booksBeginningDate,
+        });
+        setEditingCompany(c);
+        setModalView('create');
     };
 
-    const saveCompany = async () => {
+    const closeModal = () => {
+        setModalView(companies.length === 0 ? 'welcome' : 'none');
+    };
+
+    const handleSave = async () => {
+        if (!formData.name.trim()) { showToast('error', 'Company name is required'); return; }
+        if (!formData.booksBeginningDate) { showToast('error', 'Books beginning date is required'); return; }
         setSaving(true);
         try {
-            const existingCompany = await db.company.toCollection().first();
-            const now = new Date();
-
-            if (existingCompany?.id) {
-                await db.company.update(existingCompany.id, {
-                    ...formData,
-                    updatedAt: now,
-                });
+            if (editingCompany) {
+                await db.companies.update(editingCompany.id!, { ...formData, updatedAt: new Date() });
+                showToast('success', 'Company updated');
             } else {
-                await db.company.add({
-                    ...formData as Company,
-                    createdAt: now,
-                    updatedAt: now,
-                });
+                const id = await createCompany(formData as any);
+                await setActiveCompany(id);
+                showToast('success', 'Company created with default ledger groups, stock groups & units');
+            }
+            await refreshCompanies();
+            setModalView('none');
+        } catch (err) {
+            showToast('error', 'Failed to save: ' + (err as Error).message);
+        } finally { setSaving(false); }
+    };
+
+    const handleDelete = async (c: Company) => {
+        const ok = await confirm({
+            title: 'Delete Company',
+            message: `Delete "${c.name}" and ALL its data? This cannot be undone!`,
+            confirmText: 'Delete Everything', variant: 'danger',
+        });
+        if (ok) {
+            await deleteCompany(c.id!);
+            showToast('success', 'Company deleted');
+            await refreshCompanies();
+        }
+    };
+
+    const handleSelect = async (c: Company) => {
+        await setActiveCompany(c.id!);
+        showToast('success', `Switched to ${c.name}`);
+    };
+
+    // ─── EXPORT ────────────────────────────────────────────────
+    const handleExport = async (c: Company) => {
+        setExporting(c.id!);
+        try {
+            const companyId = c.id!;
+
+            // Collect ALL data for this company — use toArray + filter for tables
+            // that may not have companyId (older data)
+            const collectFor = async (table: any) => {
+                try {
+                    return await table.where({ companyId }).toArray();
+                } catch {
+                    // fallback: get all and filter
+                    const all = await table.toArray();
+                    return all.filter((r: any) => r.companyId === companyId);
+                }
+            };
+
+            const [fys, ledgerGroups, ledgers, stockGroups, units, stockItems,
+                vouchers, products, parties, invoices, purchases,
+                expenses, transactions] = await Promise.all([
+                    collectFor(db.financialYears),
+                    collectFor(db.ledgerGroups),
+                    collectFor(db.ledgers),
+                    collectFor(db.stockGroups),
+                    collectFor(db.units),
+                    collectFor(db.stockItems),
+                    collectFor(db.vouchers),
+                    collectFor(db.products),
+                    collectFor(db.parties),
+                    collectFor(db.invoices),
+                    collectFor(db.purchases),
+                    collectFor(db.expenses),
+                    collectFor(db.transactions),
+                ]);
+
+            const backup = JSON.stringify({
+                version: 2,
+                app: 'InSuite Accounts',
+                exportDate: new Date().toISOString(),
+                company: c,
+                financialYears: fys,
+                ledgerGroups,
+                ledgers,
+                stockGroups,
+                units,
+                stockItems,
+                vouchers,
+                products,
+                parties,
+                invoices,
+                purchases,
+                expenses,
+                transactions,
+            });
+
+            const encrypted = await encryptData(backup);
+            const safeName = c.name.replace(/[^a-zA-Z0-9]/g, '_');
+            const dateStr = new Date().toISOString().split('T')[0];
+            downloadFile(encrypted, `${safeName}_${dateStr}.insuite`);
+            showToast('success', `"${c.name}" exported successfully`);
+        } catch (err) {
+            showToast('error', 'Export failed: ' + (err as Error).message);
+        } finally {
+            setExporting(null);
+        }
+    };
+
+    // ─── IMPORT ────────────────────────────────────────────────
+    const processImportFile = useCallback(async (file: File) => {
+        if (!file.name.endsWith('.insuite')) {
+            showToast('error', 'Invalid file. Only .insuite backup files are accepted.');
+            return;
+        }
+        setImporting(true);
+        try {
+            const buffer = await readFileAsArrayBuffer(file);
+            const jsonStr = await decryptData(buffer);
+            const data = JSON.parse(jsonStr);
+            if (!data.company?.name) {
+                throw new Error('Invalid backup data: missing company info');
             }
 
-            // Show success
-            alert('Company details saved successfully!');
-        } catch (error) {
-            console.error('Error saving company:', error);
-            alert('Failed to save company details');
+            // Create the company fresh (without the old ID)
+            const { id: _oldId, ...companyData } = data.company;
+            const newId = await createCompany(companyData);
+
+            // Helper to re-key records
+            const rekey = (arr: any[]) => arr?.map((item: any) => {
+                const { id: _oid, companyId: _cid, ...rest } = item;
+                return { ...rest, companyId: newId };
+            }) || [];
+
+            // Bulk insert ALL data
+            const tables: [string, any][] = [
+                ['ledgerGroups', data.ledgerGroups],
+                ['ledgers', data.ledgers],
+                ['stockGroups', data.stockGroups],
+                ['units', data.units],
+                ['stockItems', data.stockItems],
+                ['vouchers', data.vouchers],
+                ['products', data.products],
+                ['parties', data.parties],
+                ['invoices', data.invoices],
+                ['purchases', data.purchases],
+                ['expenses', data.expenses],
+                ['transactions', data.transactions],
+            ];
+            for (const [tableName, records] of tables) {
+                if (records?.length) {
+                    await (db as any)[tableName].bulkAdd(rekey(records));
+                }
+            }
+
+            await setActiveCompany(newId);
+            await refreshCompanies();
+            setModalView('none');
+            showToast('success', `"${data.company.name}" imported successfully with all data`);
+        } catch (err) {
+            showToast('error', (err as Error).message);
         } finally {
-            setSaving(false);
+            setImporting(false);
         }
+    }, [refreshCompanies, setActiveCompany, showToast]);
+
+    const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) processImportFile(file);
+        e.target.value = '';
     };
 
-    const goToStep = (step: SetupStep) => setCurrentStep(step);
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setDragOver(false);
+        const file = e.dataTransfer.files[0];
+        if (file) processImportFile(file);
+    }, [processImportFile]);
 
-    const nextStep = () => {
-        const currentIndex = steps.findIndex(s => s.key === currentStep);
-        if (currentIndex < steps.length - 1) {
-            setCurrentStep(steps[currentIndex + 1].key);
-        }
-    };
-
-    const prevStep = () => {
-        const currentIndex = steps.findIndex(s => s.key === currentStep);
-        if (currentIndex > 0) {
-            setCurrentStep(steps[currentIndex - 1].key);
-        }
-    };
-
-    const currentStepIndex = steps.findIndex(s => s.key === currentStep);
-
-    if (loading) {
-        return (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-                <div className="text-title-large text-muted">Loading...</div>
-            </div>
-        );
-    }
+    const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setDragOver(true); };
+    const handleDragLeave = () => setDragOver(false);
 
     return (
-        <div className="animate-fade-in">
-            <div style={{ marginBottom: 'var(--md-sys-spacing-xl)' }}>
-                <h1 className="text-headline-large" style={{ marginBottom: 'var(--md-sys-spacing-xs)' }}>
-                    🏢 Company Setup
-                </h1>
-                <p className="text-body-large text-muted">
-                    Configure your business details for invoices, GST, and reports
-                </p>
+        <div className="page-container">
+            <div className="page-header">
+                <div>
+                    <h2 className="page-title">
+                        <span className="material-symbols-rounded" style={{ color: 'var(--md-sys-color-primary)' }}>business</span>
+                        Company Management
+                    </h2>
+                    <p className="page-subtitle">{companies.length} compan{companies.length !== 1 ? 'ies' : 'y'} configured</p>
+                </div>
+                <div className="page-header-actions">
+                    <button className="btn btn-outlined" onClick={() => setModalView('import')}>
+                        <span className="material-symbols-rounded">upload</span> Import
+                    </button>
+                    <button className="btn btn-primary" onClick={openCreate}>
+                        <span className="material-symbols-rounded">add</span> New Company
+                    </button>
+                </div>
             </div>
 
-            {/* Progress Steps */}
-            <div className="card card-gradient" style={{ marginBottom: 'var(--md-sys-spacing-xl)', padding: 'var(--md-sys-spacing-lg)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    {steps.map((step, index) => (
-                        <div
-                            key={step.key}
-                            onClick={() => goToStep(step.key)}
-                            className={`setup-step ${currentStep === step.key ? 'active' : ''} ${index < currentStepIndex ? 'completed' : ''}`}
-                            style={{ flex: 1, cursor: 'pointer', textAlign: 'center' }}
-                        >
-                            <div className="step-number" style={{ margin: '0 auto' }}>
-                                {index < currentStepIndex ? '✓' : step.icon}
+            {/* Company Cards */}
+            {companies.length === 0 ? (
+                <div className="card empty-state" style={{ padding: '64px', textAlign: 'center' }}>
+                    <span className="material-symbols-rounded" style={{ fontSize: '80px', opacity: 0.15, display: 'block', marginBottom: '16px' }}>business</span>
+                    <h3 style={{ marginBottom: '8px' }}>No Companies Yet</h3>
+                    <p style={{ color: 'var(--md-sys-color-on-surface-variant)', marginBottom: '24px' }}>Create a new company or import a backup to get started</p>
+                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                        <button className="btn btn-primary" onClick={openCreate}>
+                            <span className="material-symbols-rounded">add</span> Create Company
+                        </button>
+                        <button className="btn btn-outlined" onClick={() => setModalView('import')}>
+                            <span className="material-symbols-rounded">upload</span> Import Backup
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <div className="company-cards-grid">
+                    {companies.map(c => (
+                        <div key={c.id} className={`card company-card ${activeCompany?.id === c.id ? 'active-company' : ''}`}>
+                            <div className="company-card-header">
+                                <div className="company-card-logo">
+                                    {c.logo ? <img src={c.logo} alt="" /> : <span>{c.name.charAt(0).toUpperCase()}</span>}
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <h3 className="company-card-name">{c.name}</h3>
+                                    <span className="company-card-city">{c.city}{c.state ? `, ${c.state}` : ''}</span>
+                                </div>
+                                {activeCompany?.id === c.id && (
+                                    <span className="company-active-badge">
+                                        <span className="material-symbols-rounded" style={{ fontSize: '14px' }}>check_circle</span>
+                                        Active
+                                    </span>
+                                )}
                             </div>
-                            <div className="text-label-medium" style={{ marginTop: 'var(--md-sys-spacing-xs)' }}>
-                                {step.label}
+                            <div className="company-card-details">
+                                {c.gstin && <div className="company-detail"><span className="label">GSTIN:</span> {c.gstin}</div>}
+                                {c.pan && <div className="company-detail"><span className="label">PAN:</span> {c.pan}</div>}
+                                {c.phone && <div className="company-detail"><span className="label">Phone:</span> {c.phone}</div>}
+                                <div className="company-detail"><span className="label">FY Start:</span> {c.booksBeginningDate}</div>
+                            </div>
+                            <div className="company-card-actions">
+                                {activeCompany?.id !== c.id && (
+                                    <button className="btn btn-primary btn-sm" onClick={() => handleSelect(c)}>
+                                        <span className="material-symbols-rounded">swap_horiz</span> Switch
+                                    </button>
+                                )}
+                                <button className="btn btn-outlined btn-sm" onClick={() => handleExport(c)} disabled={exporting === c.id}>
+                                    <span className="material-symbols-rounded">{exporting === c.id ? 'hourglass_empty' : 'download'}</span>
+                                    {exporting === c.id ? 'Exporting...' : 'Export'}
+                                </button>
+                                <button className="btn btn-outlined btn-sm" onClick={() => openEdit(c)}>
+                                    <span className="material-symbols-rounded">edit</span> Edit
+                                </button>
+                                <button className="btn btn-outlined btn-sm danger" onClick={() => handleDelete(c)}>
+                                    <span className="material-symbols-rounded">delete</span>
+                                </button>
                             </div>
                         </div>
                     ))}
                 </div>
-            </div>
+            )}
 
-            {/* Form Content */}
-            <div className="card animate-slide-up" style={{ marginBottom: 'var(--md-sys-spacing-lg)' }}>
-                {currentStep === 'basic' && (
-                    <div>
-                        <h2 className="text-headline-medium" style={{ marginBottom: 'var(--md-sys-spacing-lg)' }}>
-                            📋 Basic Information
-                        </h2>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--md-sys-spacing-md)' }}>
-                            <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                                <label className="form-label form-label-required">Company / Business Name</label>
-                                <input
-                                    type="text"
-                                    className="form-input"
-                                    placeholder="Enter your business name"
-                                    value={formData.name}
-                                    onChange={(e) => updateField('name', e.target.value)}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Business Type</label>
-                                <select className="form-input form-select" defaultValue="proprietorship">
-                                    <option value="proprietorship">Proprietorship</option>
-                                    <option value="partnership">Partnership</option>
-                                    <option value="llp">LLP</option>
-                                    <option value="pvt_ltd">Private Limited</option>
-                                    <option value="public_ltd">Public Limited</option>
-                                </select>
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Industry</label>
-                                <select className="form-input form-select" defaultValue="retail">
-                                    <option value="retail">Retail</option>
-                                    <option value="wholesale">Wholesale</option>
-                                    <option value="manufacturing">Manufacturing</option>
-                                    <option value="services">Services</option>
-                                    <option value="it">IT / Software</option>
-                                    <option value="education">Education</option>
-                                    <option value="healthcare">Healthcare</option>
-                                    <option value="other">Other</option>
-                                </select>
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Phone Number</label>
-                                <input
-                                    type="tel"
-                                    className="form-input"
-                                    placeholder="+91 XXXXX XXXXX"
-                                    value={formData.phone}
-                                    onChange={(e) => updateField('phone', e.target.value)}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Email Address</label>
-                                <input
-                                    type="email"
-                                    className="form-input"
-                                    placeholder="business@example.com"
-                                    value={formData.email}
-                                    onChange={(e) => updateField('email', e.target.value)}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {currentStep === 'address' && (
-                    <div>
-                        <h2 className="text-headline-medium" style={{ marginBottom: 'var(--md-sys-spacing-lg)' }}>
-                            📍 Business Address
-                        </h2>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--md-sys-spacing-md)' }}>
-                            <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                                <label className="form-label form-label-required">Street Address</label>
-                                <textarea
-                                    className="form-input"
-                                    rows={3}
-                                    placeholder="Shop/Office No., Building Name, Street, Landmark"
-                                    value={formData.address}
-                                    onChange={(e) => updateField('address', e.target.value)}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label form-label-required">City</label>
-                                <input
-                                    type="text"
-                                    className="form-input"
-                                    placeholder="Enter city"
-                                    value={formData.city}
-                                    onChange={(e) => updateField('city', e.target.value)}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label form-label-required">State</label>
-                                <select
-                                    className="form-input form-select"
-                                    value={formData.state}
-                                    onChange={(e) => updateField('state', e.target.value)}
-                                >
-                                    <option value="">Select State</option>
-                                    {indianStates.map(state => (
-                                        <option key={state} value={state}>{state}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label form-label-required">PIN Code</label>
-                                <input
-                                    type="text"
-                                    className="form-input"
-                                    placeholder="6-digit PIN"
-                                    maxLength={6}
-                                    value={formData.pincode}
-                                    onChange={(e) => updateField('pincode', e.target.value.replace(/\D/g, ''))}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Country</label>
-                                <input
-                                    type="text"
-                                    className="form-input"
-                                    value="India"
-                                    disabled
-                                />
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {currentStep === 'tax' && (
-                    <div>
-                        <h2 className="text-headline-medium" style={{ marginBottom: 'var(--md-sys-spacing-lg)' }}>
-                            🧾 Tax & Compliance Details
-                        </h2>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--md-sys-spacing-md)' }}>
-                            <div className="form-group">
-                                <label className="form-label">GSTIN (GST Number)</label>
-                                <input
-                                    type="text"
-                                    className="form-input"
-                                    placeholder="22XXXXX1234X1Z5"
-                                    maxLength={15}
-                                    value={formData.gstin}
-                                    onChange={(e) => updateField('gstin', e.target.value.toUpperCase())}
-                                />
-                                <small className="text-label-medium text-muted">15-character GST Identification Number</small>
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">PAN Number</label>
-                                <input
-                                    type="text"
-                                    className="form-input"
-                                    placeholder="ABCDE1234F"
-                                    maxLength={10}
-                                    value={formData.pan}
-                                    onChange={(e) => updateField('pan', e.target.value.toUpperCase())}
-                                />
-                                <small className="text-label-medium text-muted">10-character Permanent Account Number</small>
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Financial Year Start</label>
-                                <select
-                                    className="form-input form-select"
-                                    value={formData.financialYearStart}
-                                    onChange={(e) => updateField('financialYearStart', e.target.value)}
-                                >
-                                    <option value="04">April (Standard)</option>
-                                    <option value="01">January</option>
-                                    <option value="07">July</option>
-                                </select>
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">GST Registration Type</label>
-                                <select className="form-input form-select" defaultValue="regular">
-                                    <option value="regular">Regular</option>
-                                    <option value="composition">Composition</option>
-                                    <option value="unregistered">Unregistered</option>
-                                </select>
-                            </div>
-                            <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                                <label className="form-label">TAN Number (if applicable)</label>
-                                <input
-                                    type="text"
-                                    className="form-input"
-                                    placeholder="ABCD12345E"
-                                    maxLength={10}
-                                />
-                                <small className="text-label-medium text-muted">Tax Deduction Account Number for TDS</small>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {currentStep === 'bank' && (
-                    <div>
-                        <h2 className="text-headline-medium" style={{ marginBottom: 'var(--md-sys-spacing-lg)' }}>
-                            🏦 Bank Account Details
-                        </h2>
-                        <p className="text-body-medium text-muted" style={{ marginBottom: 'var(--md-sys-spacing-lg)' }}>
-                            These details will appear on your invoices for payment collection
-                        </p>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--md-sys-spacing-md)' }}>
-                            <div className="form-group">
-                                <label className="form-label">Bank Name</label>
-                                <input
-                                    type="text"
-                                    className="form-input"
-                                    placeholder="e.g., State Bank of India"
-                                    value={formData.bankName}
-                                    onChange={(e) => updateField('bankName', e.target.value)}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Account Type</label>
-                                <select className="form-input form-select" defaultValue="current">
-                                    <option value="current">Current Account</option>
-                                    <option value="savings">Savings Account</option>
-                                </select>
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Account Number</label>
-                                <input
-                                    type="text"
-                                    className="form-input"
-                                    placeholder="Enter account number"
-                                    value={formData.bankAccount}
-                                    onChange={(e) => updateField('bankAccount', e.target.value)}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">IFSC Code</label>
-                                <input
-                                    type="text"
-                                    className="form-input"
-                                    placeholder="e.g., SBIN0001234"
-                                    maxLength={11}
-                                    value={formData.bankIfsc}
-                                    onChange={(e) => updateField('bankIfsc', e.target.value.toUpperCase())}
-                                />
-                            </div>
-                            <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                                <label className="form-label">Account Holder Name</label>
-                                <input
-                                    type="text"
-                                    className="form-input"
-                                    placeholder="Name as per bank records"
-                                    defaultValue={formData.name}
-                                />
-                            </div>
-                            <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                                <label className="form-label">UPI ID (optional)</label>
-                                <input
-                                    type="text"
-                                    className="form-input"
-                                    placeholder="yourname@upi"
-                                />
-                                <small className="text-label-medium text-muted">UPI ID for quick payments</small>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {currentStep === 'branding' && (
-                    <div>
-                        <h2 className="text-headline-medium" style={{ marginBottom: 'var(--md-sys-spacing-lg)' }}>
-                            🎨 Branding & Customization
-                        </h2>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 'var(--md-sys-spacing-xl)' }}>
-                            <div>
-                                <label className="form-label">Company Logo</label>
-                                <div className="logo-upload">
-                                    <span style={{ fontSize: '2rem' }}>📷</span>
-                                    <span className="text-label-medium text-muted">Click to upload</span>
-                                </div>
-                                <small className="text-label-medium text-muted" style={{ display: 'block', marginTop: 'var(--md-sys-spacing-sm)' }}>
-                                    PNG, JPG up to 2MB. Recommended: 200x200px
-                                </small>
-                            </div>
-                            <div>
-                                <div className="form-group">
-                                    <label className="form-label">Invoice Header Text</label>
-                                    <input
-                                        type="text"
-                                        className="form-input"
-                                        placeholder="Custom header for invoices"
-                                        defaultValue={formData.name}
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Invoice Footer / Terms</label>
-                                    <textarea
-                                        className="form-input"
-                                        rows={3}
-                                        placeholder="Terms and conditions, thank you message, etc."
-                                        defaultValue="Thank you for your business! Payment is due within 30 days."
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Signature</label>
-                                    <div style={{
-                                        border: '2px dashed var(--md-sys-color-outline)',
-                                        borderRadius: 'var(--md-sys-shape-corner-md)',
-                                        padding: 'var(--md-sys-spacing-lg)',
-                                        textAlign: 'center'
-                                    }}>
-                                        <span className="text-body-medium text-muted">Click to upload digital signature</span>
-                                    </div>
+            {/* Financial Years Section */}
+            {activeCompany && financialYears.length > 0 && (
+                <div style={{ marginTop: '32px' }}>
+                    <h3 className="section-title">
+                        <span className="material-symbols-rounded" style={{ fontSize: '20px' }}>calendar_month</span>
+                        Financial Years — {activeCompany.name}
+                    </h3>
+                    <div className="fy-list">
+                        {financialYears.map(fy => (
+                            <div key={fy.id} className="card fy-card">
+                                <div className="fy-label">{fy.label}</div>
+                                <div className="fy-dates">{fy.startDate} → {fy.endDate}</div>
+                                <div className="fy-status">
+                                    {fy.isClosed ? <span className="badge badge-danger">Closed</span> :
+                                        fy.isFrozen ? <span className="badge badge-warning">Frozen</span> :
+                                            <span className="badge badge-success">Active</span>}
                                 </div>
                             </div>
-                        </div>
+                        ))}
                     </div>
-                )}
-            </div>
-
-            {/* Navigation Buttons */}
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <button
-                    className="btn btn-outlined"
-                    onClick={prevStep}
-                    disabled={currentStepIndex === 0}
-                    style={{ opacity: currentStepIndex === 0 ? 0.5 : 1 }}
-                >
-                    ← Previous
-                </button>
-                <div style={{ display: 'flex', gap: 'var(--md-sys-spacing-md)' }}>
-                    <button className="btn btn-text" onClick={saveCompany} disabled={saving}>
-                        {saving ? 'Saving...' : '💾 Save Draft'}
-                    </button>
-                    {currentStepIndex < steps.length - 1 ? (
-                        <button className="btn btn-filled" onClick={nextStep}>
-                            Next →
-                        </button>
-                    ) : (
-                        <button className="btn btn-success" onClick={saveCompany} disabled={saving}>
-                            {saving ? 'Saving...' : '✓ Complete Setup'}
-                        </button>
-                    )}
                 </div>
-            </div>
+            )}
+
+            {/* ═══ WELCOME MODAL ═══ */}
+            {modalView === 'welcome' && (
+                <div className="modal-overlay">
+                    <div className="modal-content" style={{ maxWidth: '480px', textAlign: 'center' }}>
+                        <div className="modal-body" style={{ padding: '48px 32px' }}>
+                            <div style={{
+                                width: '80px', height: '80px', borderRadius: '50%',
+                                background: 'linear-gradient(135deg, var(--md-sys-color-primary), var(--md-sys-color-tertiary, #7c4dff))',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                margin: '0 auto 24px', boxShadow: '0 8px 32px rgba(0,0,0,0.15)'
+                            }}>
+                                <span className="material-symbols-rounded" style={{ fontSize: '40px', color: '#fff' }}>business</span>
+                            </div>
+                            <h2 style={{ marginBottom: '8px', fontSize: '1.5rem' }}>Welcome to InSuite Accounts</h2>
+                            <p style={{ color: 'var(--md-sys-color-on-surface-variant)', marginBottom: '32px', lineHeight: 1.6 }}>
+                                Start by creating a new company or import an existing backup file
+                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <button className="btn btn-primary" onClick={openCreate} style={{ padding: '14px 24px', fontSize: '1rem', justifyContent: 'center' }}>
+                                    <span className="material-symbols-rounded">add_business</span>
+                                    Create New Company
+                                </button>
+                                <button className="btn btn-outlined" onClick={() => setModalView('import')} style={{ padding: '14px 24px', fontSize: '1rem', justifyContent: 'center' }}>
+                                    <span className="material-symbols-rounded">upload_file</span>
+                                    Import Company Backup
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ═══ IMPORT MODAL (Drag & Drop) ═══ */}
+            {modalView === 'import' && (
+                <div className="modal-overlay" onClick={closeModal}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+                        <div className="modal-header">
+                            <h3>Import Company Backup</h3>
+                            <button className="modal-close" onClick={closeModal}>
+                                <span className="material-symbols-rounded">close</span>
+                            </button>
+                        </div>
+                        <div className="modal-body" style={{ padding: '24px' }}>
+                            <input type="file" ref={importFileRef} accept=".insuite" onChange={handleFileInput} style={{ display: 'none' }} />
+
+                            <div
+                                className={`drop-zone ${dragOver ? 'drag-active' : ''} ${importing ? 'importing' : ''}`}
+                                onDrop={handleDrop}
+                                onDragOver={handleDragOver}
+                                onDragLeave={handleDragLeave}
+                                onClick={() => !importing && importFileRef.current?.click()}
+                            >
+                                {importing ? (
+                                    <>
+                                        <span className="material-symbols-rounded drop-zone-icon spinning">sync</span>
+                                        <h4>Importing...</h4>
+                                        <p>Decrypting and restoring company data</p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="material-symbols-rounded drop-zone-icon">cloud_upload</span>
+                                        <h4>Drag & Drop your .insuite file here</h4>
+                                        <p>or click to browse files</p>
+                                        <div className="drop-zone-badge">
+                                            <span className="material-symbols-rounded" style={{ fontSize: '14px' }}>lock</span>
+                                            Encrypted InSuite Backup (.insuite)
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+
+                            <div style={{ marginTop: '16px', padding: '12px 16px', background: 'var(--md-sys-color-surface-container)', borderRadius: 'var(--md-sys-shape-corner-md)', fontSize: '0.8125rem', color: 'var(--md-sys-color-on-surface-variant)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                    <span className="material-symbols-rounded" style={{ fontSize: '16px', color: 'var(--md-sys-color-primary)' }}>info</span>
+                                    <strong>What gets imported?</strong>
+                                </div>
+                                <p style={{ margin: 0 }}>Company details, ledger groups, ledgers, stock items, parties, invoices, purchases, and all associated records.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ═══ CREATE/EDIT COMPANY MODAL ═══ */}
+            {modalView === 'create' && (
+                <div className="modal-overlay" onClick={closeModal}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '640px' }}>
+                        <div className="modal-header">
+                            <h3>{editingCompany ? 'Edit Company' : 'Create New Company'}</h3>
+                            <button className="modal-close" onClick={closeModal}>
+                                <span className="material-symbols-rounded">close</span>
+                            </button>
+                        </div>
+                        <div className="modal-body" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
+                            <div className="form-group">
+                                <label className="form-label">Company Name *</label>
+                                <input type="text" className="form-input" value={formData.name}
+                                    onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
+                                    placeholder="Your Business Name" autoFocus />
+                            </div>
+                            <div className="form-row">
+                                <div className="form-group" style={{ flex: 1 }}>
+                                    <label className="form-label">Books Beginning Date *</label>
+                                    <input type="date" className="form-input" value={formData.booksBeginningDate}
+                                        onChange={e => setFormData(p => ({ ...p, booksBeginningDate: e.target.value }))} />
+                                </div>
+                                <div className="form-group" style={{ flex: 1 }}>
+                                    <label className="form-label">Currency</label>
+                                    <select className="form-input form-select" value={formData.baseCurrency}
+                                        onChange={e => setFormData(p => ({ ...p, baseCurrency: e.target.value }))}>
+                                        <option value="INR">INR (₹)</option>
+                                        <option value="USD">USD ($)</option>
+                                        <option value="EUR">EUR (€)</option>
+                                        <option value="GBP">GBP (£)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Address</label>
+                                <textarea className="form-input" rows={2} value={formData.address}
+                                    onChange={e => setFormData(p => ({ ...p, address: e.target.value }))} placeholder="Street address" />
+                            </div>
+                            <div className="form-row">
+                                <div className="form-group" style={{ flex: 1 }}>
+                                    <label className="form-label">City</label>
+                                    <input type="text" className="form-input" value={formData.city}
+                                        onChange={e => setFormData(p => ({ ...p, city: e.target.value }))} />
+                                </div>
+                                <div className="form-group" style={{ flex: 1 }}>
+                                    <label className="form-label">State</label>
+                                    <select className="form-input form-select" value={formData.state}
+                                        onChange={e => setFormData(p => ({ ...p, state: e.target.value }))}>
+                                        <option value="">Select State</option>
+                                        {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="form-row">
+                                <div className="form-group" style={{ flex: 1 }}>
+                                    <label className="form-label">Pincode</label>
+                                    <input type="text" className="form-input" value={formData.pincode} maxLength={6}
+                                        onChange={e => setFormData(p => ({ ...p, pincode: e.target.value.replace(/\D/g, '') }))} />
+                                </div>
+                                <div className="form-group" style={{ flex: 1 }}>
+                                    <label className="form-label">Phone</label>
+                                    <input type="tel" className="form-input" value={formData.phone}
+                                        onChange={e => setFormData(p => ({ ...p, phone: e.target.value }))} />
+                                </div>
+                            </div>
+                            <div className="form-row">
+                                <div className="form-group" style={{ flex: 1 }}>
+                                    <label className="form-label">GSTIN</label>
+                                    <input type="text" className="form-input" value={formData.gstin} maxLength={15}
+                                        onChange={e => setFormData(p => ({ ...p, gstin: e.target.value.toUpperCase() }))} placeholder="22AAAAA0000A1Z5" />
+                                </div>
+                                <div className="form-group" style={{ flex: 1 }}>
+                                    <label className="form-label">PAN</label>
+                                    <input type="text" className="form-input" value={formData.pan} maxLength={10}
+                                        onChange={e => setFormData(p => ({ ...p, pan: e.target.value.toUpperCase() }))} placeholder="ABCDE1234F" />
+                                </div>
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Email</label>
+                                <input type="email" className="form-input" value={formData.email}
+                                    onChange={e => setFormData(p => ({ ...p, email: e.target.value }))} />
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn btn-outlined" onClick={closeModal}>Cancel</button>
+                            <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                                <span className="material-symbols-rounded">{saving ? 'hourglass_empty' : 'save'}</span>
+                                {saving ? 'Saving...' : editingCompany ? 'Update' : 'Create Company'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

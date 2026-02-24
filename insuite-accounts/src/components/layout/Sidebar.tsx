@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
+import { useCompany } from '../../context/CompanyContext';
 
 interface NavItem {
     path: string;
@@ -8,26 +9,34 @@ interface NavItem {
     shortcut?: string;
 }
 
-const mainNavItems: NavItem[] = [
+const dashboardItems: NavItem[] = [
     { path: '/', label: 'Dashboard', icon: 'dashboard', shortcut: 'Ctrl+D' },
-    { path: '/parties', label: 'Parties', icon: 'groups', shortcut: 'Alt+1' },
-    { path: '/products', label: 'Products', icon: 'inventory_2', shortcut: 'Alt+2' },
+];
+
+const masterItems: NavItem[] = [
+    { path: '/ledger-groups', label: 'Ledger Groups', icon: 'account_tree', shortcut: 'Alt+1' },
+    { path: '/ledgers', label: 'Ledgers', icon: 'menu_book', shortcut: 'Alt+2' },
+    { path: '/stock-groups', label: 'Stock Groups', icon: 'category', shortcut: 'Alt+3' },
+    { path: '/units', label: 'Units', icon: 'straighten', shortcut: 'Alt+4' },
+    { path: '/stock-items', label: 'Stock Items', icon: 'inventory_2', shortcut: 'Alt+5' },
+    { path: '/parties', label: 'Parties', icon: 'groups', shortcut: 'Alt+6' },
 ];
 
 const transactionNavItems: NavItem[] = [
-    { path: '/sales', label: 'Sales', icon: 'receipt_long', shortcut: 'Alt+3' },
-    { path: '/purchases', label: 'Purchases', icon: 'shopping_cart', shortcut: 'Alt+4' },
-    { path: '/expenses', label: 'Expenses', icon: 'payments', shortcut: 'Alt+5' },
-    { path: '/cash-bank', label: 'Cash & Bank', icon: 'account_balance', shortcut: 'Alt+6' },
+    { path: '/sales', label: 'Sales', icon: 'receipt_long', shortcut: 'Alt+7' },
+    { path: '/purchases', label: 'Purchases', icon: 'shopping_cart', shortcut: 'Alt+8' },
+    { path: '/expenses', label: 'Expenses', icon: 'payments' },
+    { path: '/cash-bank', label: 'Cash & Bank', icon: 'account_balance' },
 ];
 
 const reportNavItems: NavItem[] = [
-    { path: '/reports', label: 'Reports', icon: 'analytics', shortcut: 'Alt+7' },
-    { path: '/gst', label: 'GST', icon: 'receipt', shortcut: 'Alt+8' },
+    { path: '/reports', label: 'Reports', icon: 'analytics' },
+    { path: '/gst', label: 'GST', icon: 'receipt' },
 ];
 
 const settingsNavItems: NavItem[] = [
-    { path: '/settings', label: 'Settings', icon: 'settings', shortcut: 'Alt+9' },
+    { path: '/company-setup', label: 'Company', icon: 'business' },
+    { path: '/settings', label: 'Settings', icon: 'settings' },
 ];
 
 interface SidebarProps {
@@ -39,6 +48,7 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, onClose, isCollapsed, onCollapse }: SidebarProps) {
     const { resolvedTheme, setTheme } = useTheme();
+    const { activeCompany } = useCompany();
 
     const renderNavItems = (items: NavItem[]) => (
         items.map((item, index) => (
@@ -64,15 +74,7 @@ export default function Sidebar({ isOpen, onClose, isCollapsed, onCollapse }: Si
 
     return (
         <>
-            {/* Mobile Overlay */}
-            {isOpen && (
-                <div
-                    className="sidebar-overlay"
-                    onClick={onClose}
-                />
-            )}
-
-            {/* Sidebar */}
+            {isOpen && <div className="sidebar-overlay" onClick={onClose} />}
             <aside className={`sidebar ${isOpen ? 'sidebar-open' : ''} ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
                 {/* Header */}
                 <div className="sidebar-header">
@@ -83,20 +85,24 @@ export default function Sidebar({ isOpen, onClose, isCollapsed, onCollapse }: Si
                             <span className="sidebar-subtitle">Accounts</span>
                         </div>
                     )}
-                    {/* Collapse Button (Desktop) */}
-                    <button
-                        className="sidebar-collapse-btn"
-                        onClick={onCollapse}
-                        title={isCollapsed ? 'Expand' : 'Collapse'}
-                    >
-                        <span className="material-symbols-rounded">
-                            {isCollapsed ? 'chevron_right' : 'chevron_left'}
-                        </span>
+                    <button className="sidebar-collapse-btn" onClick={onCollapse} title={isCollapsed ? 'Expand' : 'Collapse'}>
+                        <span className="material-symbols-rounded">{isCollapsed ? 'chevron_right' : 'chevron_left'}</span>
                     </button>
                 </div>
 
+                {/* Active Company Badge */}
+                {activeCompany && !isCollapsed && (
+                    <div className="sidebar-company-badge">
+                        <span className="material-symbols-rounded" style={{ fontSize: '16px' }}>business</span>
+                        <span className="sidebar-company-name">{activeCompany.name}</span>
+                    </div>
+                )}
+
                 <nav className="sidebar-nav">
-                    {renderNavItems(mainNavItems)}
+                    {renderNavItems(dashboardItems)}
+
+                    {!isCollapsed && <div className="nav-section-title">Masters</div>}
+                    {renderNavItems(masterItems)}
 
                     {!isCollapsed && <div className="nav-section-title">Transactions</div>}
                     {renderNavItems(transactionNavItems)}
@@ -109,25 +115,20 @@ export default function Sidebar({ isOpen, onClose, isCollapsed, onCollapse }: Si
                 </nav>
 
                 <div className="sidebar-footer">
-                    {/* Keyboard shortcut hint */}
                     {!isCollapsed && (
-                        <button
-                            className="btn btn-outlined sidebar-theme-btn"
+                        <button className="btn btn-outlined sidebar-theme-btn"
                             onClick={() => document.dispatchEvent(new CustomEvent('toggle-shortcuts-help'))}
                             title="Keyboard Shortcuts (Ctrl+/)"
-                            style={{ width: '100%', justifyContent: 'center', marginBottom: '6px' }}
-                        >
+                            style={{ width: '100%', justifyContent: 'center', marginBottom: '6px' }}>
                             <span className="material-symbols-rounded" style={{ fontSize: '18px' }}>keyboard</span>
                             Shortcuts
                             <kbd className="nav-shortcut-hint" style={{ marginLeft: 'auto' }}>Ctrl+/</kbd>
                         </button>
                     )}
-                    <button
-                        className="btn btn-outlined sidebar-theme-btn"
+                    <button className="btn btn-outlined sidebar-theme-btn"
                         onClick={() => setTheme(resolvedTheme === 'light' ? 'dark' : 'light')}
                         title={resolvedTheme === 'light' ? 'Dark Mode' : 'Light Mode'}
-                        style={{ width: '100%', justifyContent: 'center' }}
-                    >
+                        style={{ width: '100%', justifyContent: 'center' }}>
                         <span className="material-symbols-rounded" style={{ fontSize: '20px' }}>
                             {resolvedTheme === 'light' ? 'dark_mode' : 'light_mode'}
                         </span>

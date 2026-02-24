@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../db/database';
 import { useConfirm } from '../components/ConfirmModal';
+import { useToast } from '../components/Toast';
 import type { Invoice, InvoiceItem, Party, Product } from '../types';
 
 const INVOICE_TYPES = [
@@ -21,6 +22,9 @@ export default function Sales() {
     const [activeTab, setActiveTab] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
+    const [_viewInvoice, setViewInvoice] = useState<Invoice | null>(null);
+    const confirm = useConfirm();
+    const { showToast } = useToast();
 
     // Invoice form state
     const [invoiceForm, setInvoiceForm] = useState({
@@ -79,7 +83,7 @@ export default function Sales() {
 
     const updateLineItem = (index: number, field: keyof LineItem, value: string | number) => {
         const updated = [...lineItems];
-        (updated[index] as Record<string, string | number>)[field] = value;
+        (updated[index] as unknown as Record<string, string | number>)[field] = value;
 
         // If product selected, auto-fill details
         if (field === 'productId') {
@@ -173,14 +177,18 @@ export default function Sales() {
         generateInvoiceNumber(invoices.length);
     };
 
-    const confirm = useConfirm();
-
     const handleDelete = async (id: number) => {
-        const ok = await confirm({ message: 'This invoice will be permanently deleted.', title: 'Delete Invoice?', variant: 'danger' });
+        const ok = await confirm({ message: 'This invoice will be permanently deleted.', title: 'Delete Invoice?', confirmText: 'Delete', variant: 'danger' });
         if (ok) {
             await db.invoices.delete(id);
+            showToast('success', 'Invoice deleted');
             loadData();
         }
+    };
+
+    const handlePrint = (inv: Invoice) => {
+        setViewInvoice(inv);
+        setTimeout(() => window.print(), 300);
     };
 
     const filteredInvoices = invoices.filter(inv => {
@@ -296,15 +304,15 @@ export default function Sales() {
                                         </span>
                                     </td>
                                     <td>
-                                        <div style={{ display: 'flex', gap: '4px' }}>
-                                            <button className="btn btn-icon" title="View">
+                                        <div className="action-btns">
+                                            <button className="action-btn view" title="View" onClick={() => setViewInvoice(inv)}>
                                                 <span className="material-symbols-rounded">visibility</span>
                                             </button>
-                                            <button className="btn btn-icon" title="Print">
+                                            <button className="action-btn print" title="Print" onClick={() => handlePrint(inv)}>
                                                 <span className="material-symbols-rounded">print</span>
                                             </button>
-                                            <button className="btn btn-icon" onClick={() => inv.id && handleDelete(inv.id)} title="Delete">
-                                                <span className="material-symbols-rounded" style={{ color: 'var(--md-sys-color-error)' }}>delete</span>
+                                            <button className="action-btn delete" title="Delete" onClick={() => inv.id && handleDelete(inv.id)}>
+                                                <span className="material-symbols-rounded">delete</span>
                                             </button>
                                         </div>
                                     </td>
@@ -392,18 +400,18 @@ export default function Sales() {
                                         </button>
                                     </div>
 
-                                    <div style={{ overflowX: 'auto' }}>
-                                        <table className="data-table" style={{ minWidth: '800px' }}>
+                                    <div className="invoice-grid">
+                                        <table style={{ minWidth: '780px' }}>
                                             <thead>
                                                 <tr>
                                                     <th style={{ width: '200px' }}>Product</th>
-                                                    <th>HSN</th>
-                                                    <th>Qty</th>
-                                                    <th>Rate (₹)</th>
-                                                    <th>Disc %</th>
-                                                    <th>GST %</th>
-                                                    <th>Total (₹)</th>
-                                                    <th></th>
+                                                    <th style={{ width: '80px' }}>HSN</th>
+                                                    <th style={{ width: '70px' }}>Qty</th>
+                                                    <th style={{ width: '100px' }}>Rate (₹)</th>
+                                                    <th style={{ width: '70px' }}>Disc %</th>
+                                                    <th style={{ width: '80px' }}>GST %</th>
+                                                    <th style={{ width: '100px' }}>Total (₹)</th>
+                                                    <th style={{ width: '40px' }}></th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -411,28 +419,28 @@ export default function Sales() {
                                                     <tr key={index}>
                                                         <td>
                                                             <select
-                                                                className="form-input form-select"
-                                                                style={{ minWidth: '150px' }}
+                                                                className="compact-input"
                                                                 value={item.productId || ''}
                                                                 onChange={e => updateLineItem(index, 'productId', Number(e.target.value))}
+                                                                style={{ textAlign: 'left' }}
                                                             >
                                                                 <option value="">Select Product</option>
                                                                 {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                                             </select>
                                                         </td>
-                                                        <td><input type="text" className="form-input" value={item.hsn} onChange={e => updateLineItem(index, 'hsn', e.target.value)} style={{ width: '80px' }} /></td>
-                                                        <td><input type="number" className="form-input" value={item.quantity} onChange={e => updateLineItem(index, 'quantity', Number(e.target.value))} min="1" style={{ width: '60px' }} /></td>
-                                                        <td><input type="number" className="form-input" value={item.rate} onChange={e => updateLineItem(index, 'rate', Number(e.target.value))} step="0.01" style={{ width: '80px' }} /></td>
-                                                        <td><input type="number" className="form-input" value={item.discountPercent} onChange={e => updateLineItem(index, 'discountPercent', Number(e.target.value))} min="0" max="100" style={{ width: '60px' }} /></td>
+                                                        <td><input type="text" className="compact-input" value={item.hsn} onChange={e => updateLineItem(index, 'hsn', e.target.value)} /></td>
+                                                        <td><input type="number" className="compact-input" value={item.quantity} onChange={e => updateLineItem(index, 'quantity', Number(e.target.value))} min="1" /></td>
+                                                        <td><input type="number" className="compact-input" value={item.rate} onChange={e => updateLineItem(index, 'rate', Number(e.target.value))} step="0.01" /></td>
+                                                        <td><input type="number" className="compact-input" value={item.discountPercent} onChange={e => updateLineItem(index, 'discountPercent', Number(e.target.value))} min="0" max="100" /></td>
                                                         <td>
-                                                            <select className="form-input form-select" value={item.gstRate} onChange={e => updateLineItem(index, 'gstRate', Number(e.target.value))} style={{ width: '70px' }}>
+                                                            <select className="compact-input" value={item.gstRate} onChange={e => updateLineItem(index, 'gstRate', Number(e.target.value))}>
                                                                 {[0, 5, 12, 18, 28].map(r => <option key={r} value={r}>{r}%</option>)}
                                                             </select>
                                                         </td>
-                                                        <td className="text-success">₹{item.total.toFixed(2)}</td>
+                                                        <td className="invoice-row-total">₹{item.total.toFixed(2)}</td>
                                                         <td>
-                                                            <button type="button" className="btn btn-icon" onClick={() => removeLineItem(index)}>
-                                                                <span className="material-symbols-rounded" style={{ color: 'var(--md-sys-color-error)' }}>delete</span>
+                                                            <button type="button" className="invoice-row-delete" onClick={() => removeLineItem(index)}>
+                                                                <span className="material-symbols-rounded">delete</span>
                                                             </button>
                                                         </td>
                                                     </tr>
@@ -444,30 +452,30 @@ export default function Sales() {
 
                                 {/* Totals */}
                                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                    <div style={{ width: '300px', background: 'var(--md-sys-color-surface-container-high)', padding: 'var(--md-sys-spacing-md)', borderRadius: 'var(--md-sys-shape-corner-md)' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                            <span className="text-muted">Subtotal</span>
-                                            <span>₹{totals.subtotal.toFixed(2)}</span>
+                                    <div className="totals-card">
+                                        <div className="totals-row">
+                                            <span className="label">Subtotal</span>
+                                            <span className="value">₹{totals.subtotal.toFixed(2)}</span>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                            <span className="text-muted">Discount</span>
-                                            <span className="text-error">-₹{totals.discount.toFixed(2)}</span>
+                                        <div className="totals-row discount">
+                                            <span className="label">Discount</span>
+                                            <span className="value">-₹{totals.discount.toFixed(2)}</span>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                            <span className="text-muted">CGST</span>
-                                            <span>₹{totals.cgst.toFixed(2)}</span>
+                                        <div className="totals-row">
+                                            <span className="label">CGST</span>
+                                            <span className="value">₹{totals.cgst.toFixed(2)}</span>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                            <span className="text-muted">SGST</span>
-                                            <span>₹{totals.sgst.toFixed(2)}</span>
+                                        <div className="totals-row">
+                                            <span className="label">SGST</span>
+                                            <span className="value">₹{totals.sgst.toFixed(2)}</span>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                            <span className="text-muted">Round Off</span>
-                                            <span>₹{totals.roundOff.toFixed(2)}</span>
+                                        <div className="totals-row">
+                                            <span className="label">Round Off</span>
+                                            <span className="value">₹{totals.roundOff.toFixed(2)}</span>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid var(--md-sys-color-outline-variant)', fontWeight: 600 }}>
-                                            <span>Grand Total</span>
-                                            <span className="text-success">₹{totals.grandTotal.toLocaleString('en-IN')}</span>
+                                        <div className="totals-row grand-total">
+                                            <span className="label">Grand Total</span>
+                                            <span className="value">₹{totals.grandTotal.toLocaleString('en-IN')}</span>
                                         </div>
                                     </div>
                                 </div>

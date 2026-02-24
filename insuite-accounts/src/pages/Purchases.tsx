@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { db } from '../db/database';
 import type { Purchase, PurchaseItem, Party, Product } from '../types';
+import { useConfirm } from '../components/ConfirmModal';
+import { useToast } from '../components/Toast';
 
 interface LineItem extends PurchaseItem {
     productName: string;
@@ -13,6 +15,8 @@ export default function Purchases() {
     const [showModal, setShowModal] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
+    const confirm = useConfirm();
+    const { showToast } = useToast();
 
     const [purchaseForm, setPurchaseForm] = useState({
         billNumber: '',
@@ -59,7 +63,7 @@ export default function Purchases() {
 
     const updateLineItem = (index: number, field: keyof LineItem, value: string | number) => {
         const updated = [...lineItems];
-        (updated[index] as Record<string, string | number>)[field] = value;
+        (updated[index] as unknown as Record<string, string | number>)[field] = value;
 
         if (field === 'productId') {
             const product = products.find(p => p.id === Number(value));
@@ -137,8 +141,15 @@ export default function Purchases() {
     };
 
     const handleDelete = async (id: number) => {
-        if (confirm('Are you sure you want to delete this purchase?')) {
+        const ok = await confirm({
+            title: 'Delete Purchase',
+            message: 'This purchase record will be permanently deleted.',
+            confirmText: 'Delete',
+            variant: 'danger',
+        });
+        if (ok) {
             await db.purchases.delete(id);
+            showToast('success', 'Purchase deleted');
             loadData();
         }
     };
@@ -226,12 +237,15 @@ export default function Purchases() {
                                         </span>
                                     </td>
                                     <td>
-                                        <div style={{ display: 'flex', gap: '4px' }}>
-                                            <button className="btn btn-icon" title="View">
+                                        <div className="action-btns">
+                                            <button className="action-btn view" title="View">
                                                 <span className="material-symbols-rounded">visibility</span>
                                             </button>
-                                            <button className="btn btn-icon" onClick={() => purchase.id && handleDelete(purchase.id)} title="Delete">
-                                                <span className="material-symbols-rounded" style={{ color: 'var(--md-sys-color-error)' }}>delete</span>
+                                            <button className="action-btn print" title="Print">
+                                                <span className="material-symbols-rounded">print</span>
+                                            </button>
+                                            <button className="action-btn delete" onClick={() => purchase.id && handleDelete(purchase.id)} title="Delete">
+                                                <span className="material-symbols-rounded">delete</span>
                                             </button>
                                         </div>
                                     </td>
@@ -312,16 +326,16 @@ export default function Purchases() {
                                         </button>
                                     </div>
 
-                                    <div style={{ overflowX: 'auto' }}>
-                                        <table className="data-table">
+                                    <div className="invoice-grid">
+                                        <table>
                                             <thead>
                                                 <tr>
-                                                    <th>Product</th>
-                                                    <th>Qty</th>
-                                                    <th>Rate (₹)</th>
-                                                    <th>GST %</th>
-                                                    <th>Total (₹)</th>
-                                                    <th></th>
+                                                    <th style={{ width: '200px' }}>Product</th>
+                                                    <th style={{ width: '70px' }}>Qty</th>
+                                                    <th style={{ width: '100px' }}>Rate (₹)</th>
+                                                    <th style={{ width: '80px' }}>GST %</th>
+                                                    <th style={{ width: '100px' }}>Total (₹)</th>
+                                                    <th style={{ width: '40px' }}></th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -329,25 +343,26 @@ export default function Purchases() {
                                                     <tr key={index}>
                                                         <td>
                                                             <select
-                                                                className="form-input form-select"
+                                                                className="compact-input"
                                                                 value={item.productId || ''}
                                                                 onChange={e => updateLineItem(index, 'productId', Number(e.target.value))}
+                                                                style={{ textAlign: 'left' }}
                                                             >
                                                                 <option value="">Select Product</option>
                                                                 {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                                             </select>
                                                         </td>
-                                                        <td><input type="number" className="form-input" value={item.quantity} onChange={e => updateLineItem(index, 'quantity', Number(e.target.value))} min="1" style={{ width: '70px' }} /></td>
-                                                        <td><input type="number" className="form-input" value={item.rate} onChange={e => updateLineItem(index, 'rate', Number(e.target.value))} style={{ width: '90px' }} /></td>
+                                                        <td><input type="number" className="compact-input" value={item.quantity} onChange={e => updateLineItem(index, 'quantity', Number(e.target.value))} min="1" /></td>
+                                                        <td><input type="number" className="compact-input" value={item.rate} onChange={e => updateLineItem(index, 'rate', Number(e.target.value))} /></td>
                                                         <td>
-                                                            <select className="form-input form-select" value={item.gstRate} onChange={e => updateLineItem(index, 'gstRate', Number(e.target.value))} style={{ width: '70px' }}>
+                                                            <select className="compact-input" value={item.gstRate} onChange={e => updateLineItem(index, 'gstRate', Number(e.target.value))}>
                                                                 {[0, 5, 12, 18, 28].map(r => <option key={r} value={r}>{r}%</option>)}
                                                             </select>
                                                         </td>
-                                                        <td>₹{item.total.toFixed(2)}</td>
+                                                        <td className="invoice-row-total">₹{item.total.toFixed(2)}</td>
                                                         <td>
-                                                            <button type="button" className="btn btn-icon" onClick={() => removeLineItem(index)}>
-                                                                <span className="material-symbols-rounded" style={{ color: 'var(--md-sys-color-error)' }}>delete</span>
+                                                            <button type="button" className="invoice-row-delete" onClick={() => removeLineItem(index)}>
+                                                                <span className="material-symbols-rounded">delete</span>
                                                             </button>
                                                         </td>
                                                     </tr>
@@ -359,18 +374,18 @@ export default function Purchases() {
 
                                 {/* Totals */}
                                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                    <div style={{ width: '280px', background: 'var(--md-sys-color-surface-container-high)', padding: 'var(--md-sys-spacing-md)', borderRadius: 'var(--md-sys-shape-corner-md)' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                            <span className="text-muted">Subtotal</span>
-                                            <span>₹{totals.subtotal.toFixed(2)}</span>
+                                    <div className="totals-card">
+                                        <div className="totals-row">
+                                            <span className="label">Subtotal</span>
+                                            <span className="value">₹{totals.subtotal.toFixed(2)}</span>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                            <span className="text-muted">CGST + SGST</span>
-                                            <span>₹{totals.totalTax.toFixed(2)}</span>
+                                        <div className="totals-row">
+                                            <span className="label">CGST + SGST</span>
+                                            <span className="value">₹{totals.totalTax.toFixed(2)}</span>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid var(--md-sys-color-outline-variant)', fontWeight: 600 }}>
-                                            <span>Grand Total</span>
-                                            <span>₹{totals.grandTotal.toLocaleString('en-IN')}</span>
+                                        <div className="totals-row grand-total">
+                                            <span className="label">Grand Total</span>
+                                            <span className="value">₹{totals.grandTotal.toLocaleString('en-IN')}</span>
                                         </div>
                                     </div>
                                 </div>

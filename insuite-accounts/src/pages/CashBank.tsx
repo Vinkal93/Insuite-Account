@@ -7,7 +7,7 @@ export default function CashBank() {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [showModal, setShowModal] = useState(false);
     const [modalType, setModalType] = useState<'account' | 'transaction'>('account');
-    const [loading, setLoading] = useState(true);
+    const [_loading, setLoading] = useState(true);
 
     const [accountForm, setAccountForm] = useState({
         name: '',
@@ -89,7 +89,7 @@ export default function CashBank() {
     const totalCash = accounts.filter(a => a.type === 'cash').reduce((sum, a) => sum + a.balance, 0);
     const totalBank = accounts.filter(a => a.type === 'bank').reduce((sum, a) => sum + a.balance, 0);
 
-    const getAccountName = (id?: number) => accounts.find(a => a.id === id)?.name || '-';
+    // getAccountName intentionally removed (was unused)
 
     return (
         <div className="animate-fade-in">
